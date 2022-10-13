@@ -222,213 +222,9 @@ interface IDEXRouter {
     ) external;
 }
 
-interface IDividendDistributor {
-    function setShare(address shareholder, uint256 amount) external;
-    function deposit() external payable;
-}
-
-contract DividendDistributor is IDividendDistributor, Auth {
-    using SafeMath for uint256;
-
-    address _token;
-
-    struct Share {
-        uint256 amount;
-        uint256 totalExcluded;
-        uint256 totalRealised;
-    }
-
-    IBEP20 BASE; 
-    address WETH;
-    IDEXRouter router;
-
-    address[] shareholders;
-    mapping (address => uint256) shareholderIndexes;
-    mapping (address => uint256) shareholderClaims;
-
-    mapping (address => bool) public availableRewards;
-    mapping (address => uint256) public totalRewardsDistributed;
-    mapping (address => address) public pathRewards;
-
-    mapping (address => Share) public shares;
-
-    uint256 public totalShares;
-    uint256 public totalDividends;
-    uint256 public totalDistributed; // to be shown in UI
-    uint256 public dividendsPerShare;
-    uint256 public dividendsPerShareAccuracyFactor = 10 ** 36;
-
-    uint256 currentIndex;
-
-    bool initialized;
-    modifier initialization() {
-        require(!initialized);
-        _;
-        initialized = true;
-    }
-
-    modifier onlyToken() {
-        require(msg.sender == _token); _;
-    }
-
-    constructor (address _router, address _owner, address weth_) Auth(_owner) {
-        router = _router != address(0)
-        ? IDEXRouter(_router)
-        : IDEXRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E);
-        _token = msg.sender;
-        WETH = weth_;
-        BASE = IBEP20(weth_);
-        BASE.approve(_router, 2**256 - 1);
-
-    }
-
-    function setReward(address _reward, bool status) public onlyOwner {
-
-        availableRewards[_reward] = status;
-
-    }
-
-    function setPathReward(address _reward, address _path) public onlyOwner {
-
-        pathRewards[_reward] = _path;
-
-    }
-
-    function changeRouterVersion(address _router)
-        external
-        onlyOwner
-    {
-        IDEXRouter _uniswapV2Router = IDEXRouter(_router);
-
-        router = _uniswapV2Router;
-    }
-
-    function setShare(address shareholder, uint256 amount) external override onlyToken {
-        if(shares[shareholder].amount > 0){
-            distributeDividend(shareholder, address(BASE));
-        }
-
-        if(amount > 0 && shares[shareholder].amount == 0){
-            addShareholder(shareholder);
-        }else if(amount == 0 && shares[shareholder].amount > 0){
-            removeShareholder(shareholder);
-        }
-
-        totalShares = totalShares.sub(shares[shareholder].amount).add(amount);
-        shares[shareholder].amount = amount;
-        shares[shareholder].totalExcluded = getCumulativeDividends(shares[shareholder].amount);
-    }
-
-    function deposit() external payable override onlyToken {
-        uint256 amount = msg.value;
-        totalDividends = totalDividends.add(amount);
-        dividendsPerShare = dividendsPerShare.add(dividendsPerShareAccuracyFactor.mul(amount).div(totalShares));
-    }
-
-    function distributeDividend(address shareholder, address rewardAddress) internal {
-        if(shares[shareholder].amount == 0){ return; }
-
-        uint256 amount = getUnpaidEarnings(shareholder);
-
-        if(amount > 0){
-            totalDistributed = totalDistributed.add(amount);
-
-            //
-            if(rewardAddress == _token){
-                IBEP20(_token).transferFrom(address(this), msg.sender, amount);
-            }
-            if(rewardAddress == address(BASE)) {
-                payable(shareholder).transfer(amount);
-            } else {
-
-                IBEP20 rewardToken = IBEP20(rewardAddress);
-
-                uint256 beforeBalance = rewardToken.balanceOf(shareholder);
-
-                if(pathRewards[rewardAddress] == address(0)) {
-                    address[] memory path = new address[](2);
-                    path[0] = address(BASE);
-                    path[1] = rewardAddress;
-
-                    router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
-                        0,
-                        path,
-                        shareholder,
-                        block.timestamp
-                    );                 
-                } else {
-                    address[] memory path = new address[](3);
-                    path[0] = address(BASE);
-                    path[1] = pathRewards[rewardAddress];
-                    path[2] = rewardAddress;
-
-                    router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
-                        0,
-                        path,
-                        shareholder,
-                        block.timestamp
-                    );             
-  
-                }
-
-                uint256 afterBalance = rewardToken.balanceOf(shareholder);
-    
-                totalRewardsDistributed[rewardAddress] = totalRewardsDistributed[rewardAddress].add(afterBalance.sub(beforeBalance));  
-
-            }
-
-            //
-
-            shareholderClaims[shareholder] = block.timestamp;
-            shares[shareholder].totalRealised = shares[shareholder].totalRealised.add(amount);
-            shares[shareholder].totalExcluded = getCumulativeDividends(shares[shareholder].amount);
-        }
-    }
-
-    function makeApprove(address token, address spender) public onlyOwner {
-
-        IBEP20(token).approve(spender, 2**256 - 1);
-
-    }
-
-    function claimDividend(address rewardAddress) external {
-
-        require(availableRewards[rewardAddress], "This reward is not available");
-
-        distributeDividend(msg.sender, rewardAddress);
-    }
-
-    function getUnpaidEarnings(address shareholder) public view returns (uint256) {
-        if(shares[shareholder].amount == 0){ return 0; }
-
-        uint256 shareholderTotalDividends = getCumulativeDividends(shares[shareholder].amount);
-        uint256 shareholderTotalExcluded = shares[shareholder].totalExcluded;
-
-        if(shareholderTotalDividends <= shareholderTotalExcluded){ return 0; }
-
-        return shareholderTotalDividends.sub(shareholderTotalExcluded);
-    }
-
-    function getCumulativeDividends(uint256 share) internal view returns (uint256) {
-        return share.mul(dividendsPerShare).div(dividendsPerShareAccuracyFactor);
-    }
-
-    function addShareholder(address shareholder) internal {
-        shareholderIndexes[shareholder] = shareholders.length;
-        shareholders.push(shareholder);
-    }
-
-    function removeShareholder(address shareholder) internal {
-        shareholders[shareholderIndexes[shareholder]] = shareholders[shareholders.length-1];
-        shareholderIndexes[shareholders[shareholders.length-1]] = shareholderIndexes[shareholder];
-        shareholders.pop();
-    }
-}
-
 contract Token is IBEP20, Auth {
     using SafeMath for uint256;
 
-    address public WETH;
     address DEAD = 0x000000000000000000000000000000000000dEaD;
     address ZERO = 0x0000000000000000000000000000000000000000;
 
@@ -451,21 +247,30 @@ contract Token is IBEP20, Auth {
     IDEXRouter public router;
     address public pair;
 
-    DividendDistributor distributor;
-    address public distributorAddress;
+    //For Reflecition
+    struct Share {
+        uint256 amount;
+        uint256 totalExcluded;
+        uint256 totalRealised;
+    }
 
-    uint256 distributorGas = 500000;
+    address[] shareholders;
+    mapping(address => uint256) shareholderIndexes;
+    mapping(address => uint256) totalRewardsDistributed;
+    mapping(address => Share) shares;
+
+    uint256 totalShares;
+    uint256 dividendsPerShare;
+    uint256 dividendsPerShareAccuracyFactor = 10 **18;
 
     constructor (address router_, address weth, uint256 _reflectionFee) Auth(msg.sender) {
         address _router = router_;
         router = IDEXRouter(_router);
         pair = IDEXFactory(router.factory()).createPair(weth, address(this));
         _allowances[address(this)][_router] = _totalSupply;
-        WETH = router.WETH();
-        distributor = new DividendDistributor(_router, msg.sender, weth);
-        distributorAddress = address(distributor);
 
         isTxLimitExempt[msg.sender] = true;
+        isDividendExempt[msg.sender] = true;
         isDividendExempt[_router] = true;
         isDividendExempt[pair] = true;
         isDividendExempt[address(this)] = true;
@@ -517,8 +322,8 @@ contract Token is IBEP20, Auth {
         uint256 amountReceived = takeFee(sender, amount);
         _balances[recipient] = _balances[recipient].add(amountReceived);
 
-        if(!isDividendExempt[sender]){ try distributor.setShare(sender, _balances[sender]) {} catch {} }
-        if(!isDividendExempt[recipient]){ try distributor.setShare(recipient, _balances[recipient]) {} catch {} }
+        if(!isDividendExempt[sender]) _setShare(sender, _balances[sender]);
+        if(!isDividendExempt[recipient]) _setShare(recipient, _balances[recipient]);
 
         emit Transfer(sender, recipient, amountReceived);
         return true;
@@ -540,6 +345,8 @@ contract Token is IBEP20, Auth {
         _balances[address(this)] = _balances[address(this)].add(feeAmount);
         emit Transfer(sender, address(this), feeAmount);
 
+        updateDivendensPerShare(feeAmount);
+
         return amount.sub(feeAmount);
     }
 
@@ -556,9 +363,9 @@ contract Token is IBEP20, Auth {
         require(holder != address(this) && holder != pair);
         isDividendExempt[holder] = exempt;
         if(exempt){
-            distributor.setShare(holder, 0);
+            _setShare(holder, 0);
         }else{
-            distributor.setShare(holder, _balances[holder]);
+            _setShare(holder, _balances[holder]);
         }
     }
 
@@ -566,11 +373,6 @@ contract Token is IBEP20, Auth {
         isTxLimitExempt[holder] = exempt;
     }
     
-    function setDistributorSettings(uint256 gas) external authorized {
-        require(gas < 750000);
-        distributorGas = gas;
-    }
-
     function getCirculatingSupply() public view returns (uint256) {
         return _totalSupply.sub(balanceOf(DEAD)).sub(balanceOf(ZERO));
     }
@@ -590,6 +392,121 @@ contract Token is IBEP20, Auth {
         return true;
     }
 
-    event AutoLiquify(uint256 amountETH, uint256 amountBOG);
-    event BuybackMultiplierActive(uint256 duration);
+     function getHoldersNum() public view returns (uint256) {
+        return shareholders.length;
+    }
+
+    /**
+        For reflection
+     */
+    function _setShare(address shareholder, uint256 amount) internal {
+        if (shares[shareholder].amount > 0) {
+            distributeDividend(shareholder);
+        }
+
+        if (amount > 0 && shares[shareholder].amount == 0) {
+            addShareholder(shareholder);
+        } else if (amount == 0 && shares[shareholder].amount > 0) {
+            removeShareholder(shareholder);
+        }
+
+        totalShares = totalShares.add(amount).sub(
+            shares[shareholder].amount
+        );
+        shares[shareholder].amount = amount;
+        shares[shareholder].totalExcluded = getCumulativeDividends(
+            shares[shareholder].amount
+        );
+    }
+
+    function updateDivendensPerShare(uint256 amount) internal {
+        if (totalShares == 0) return;
+        dividendsPerShare = dividendsPerShare.add(
+            dividendsPerShareAccuracyFactor.mul(amount).div(totalShares)
+        );
+    }
+
+    function distributeDividend(address shareholder) internal {
+        if (shares[shareholder].amount == 0) {
+            return;
+        }
+
+        uint256 amount = getUnpaidEarnings(shareholder);
+
+        if (amount > 0) {
+            _balances[address(this)] = _balances[address(this)].sub(
+                amount
+            );
+            _balances[shareholder] = _balances[shareholder].add(
+                amount
+            );
+
+            shares[shareholder].totalRealised = shares[shareholder]
+                .totalRealised
+                .add(amount);
+            shares[shareholder].totalExcluded = getCumulativeDividends(
+                shares[shareholder].amount
+            );
+        }
+
+        emit Transfer(address(this), shareholder, amount);
+    }
+
+    function claimDividend() external {
+        distributeDividend(msg.sender);
+    }
+
+    function getUnpaidEarnings(address shareholder)
+        public
+        view
+        returns (uint256)
+    {
+        if (shares[shareholder].amount == 0) {
+            return 0;
+        }
+
+        uint256 shareholderTotalDividends = getCumulativeDividends(
+            shares[shareholder].amount
+        );
+        uint256 shareholderTotalExcluded = shares[shareholder].totalExcluded;
+
+        if (shareholderTotalDividends <= shareholderTotalExcluded) {
+            return 0;
+        }
+
+        return shareholderTotalDividends.sub(shareholderTotalExcluded);
+    }
+
+    function getCumulativeDividends(uint256 share)
+        internal
+        view
+        returns (uint256)
+    {
+        return share.mul(dividendsPerShare).div(dividendsPerShareAccuracyFactor);
+    }
+
+    function addShareholder(address shareholder) internal {
+        shareholderIndexes[shareholder] = shareholders.length;
+        shareholders.push(shareholder);
+    }
+
+    function removeShareholder(address shareholder) internal {
+        shareholders[shareholderIndexes[shareholder]] = shareholders[
+            shareholders.length - 1
+        ];
+        shareholderIndexes[
+            shareholders[shareholders.length - 1]
+        ] = shareholderIndexes[shareholder];
+        shareholders.pop();
+    }
+
+    function withdraw() external onlyOwner {
+        _balances[msg.sender] = _balances[msg.sender].add(
+            _balances[address(this)]
+        );
+        _balances[address(this)] = 0;
+
+        emit Transfer(address(this), msg.sender, _balances[address(this)]);
+    }
+
 }

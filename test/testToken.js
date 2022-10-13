@@ -9,6 +9,8 @@ var exchangeFactory;
 var wBNB;
 var token;
 var userWallet;
+var userWallet1;
+var userwallet2;
 
 
 
@@ -18,10 +20,12 @@ describe("Create Account", () => {
     [owner] = await ethers.getSigners();
     network = await owner.provider._networkPromise;
     userWallet = ethers.Wallet.createRandom();
+    userWallet1 = ethers.Wallet.createRandom();
+    userWallet2 = ethers.Wallet.createRandom();
     userWallet = userWallet.connect(ethers.provider);
     var tx = await owner.sendTransaction({
       to: userWallet.address,
-      value: ethers.utils.parseUnits("10", 8)
+      value: ethers.utils.parseUnits("1", 18)
     });
     await tx.wait();
   });
@@ -54,7 +58,7 @@ describe("Exchage deploys", () => {
 
   it("Token deploy", async () => {
     const Token = await ethers.getContractFactory("Token");
-    token = await Token.deploy(exchangeRouter.address, wBNB.address, "800");
+    token = await Token.deploy(exchangeRouter.address, wBNB.address, "200");
     await token.deployed();
   });
 
@@ -65,7 +69,7 @@ describe("constract prepare", () => {
   it("approve", async () => {
     var tx = await token.approve(
       exchangeRouter.address,
-      ethers.utils.parseUnits("100000", 5)
+      ethers.utils.parseUnits("1000000", 18)
     );
     await tx.wait();
   });
@@ -73,42 +77,67 @@ describe("constract prepare", () => {
   it("add liquidity eth", async () => {
     var tx = await exchangeRouter.addLiquidityETH(
       token.address,
-      ethers.utils.parseUnits("10000", 5),
+      ethers.utils.parseUnits("1000000", 18),
       0,
       0,
       owner.address,
       "1234325432314321",
-      { value: ethers.utils.parseUnits("0.1", 18) }
+      { value: ethers.utils.parseUnits("1", 18) }
     )
     await tx.wait();
   });
-
-  it(" send some Token token to userWallet", async () => {
-    var tx = await token.transfer(userWallet.address, toBigNum("5000", 5));
-    await tx.wait();
-  });
-
-
 });
 
 describe("Legercy exchange", () => {
 
-  it(" send some Token token to userWallet", async () => {
+  it(" send some Token token to userWallets", async () => {
 
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
+    var tx = await token.transfer(userWallet.address, toBigNum("1000", 18));
     await tx.wait();
+
+    var tx = await token.transfer(userWallet1.address, toBigNum("1000", 18));
+    await tx.wait();
+
+    var tx = await token.transfer(userWallet2.address, toBigNum("1000", 18));
+    await tx.wait();
+
+    checkBalance();
 
   });
 
-  it(" send some Token token to userWallet", async () => {
+  it(" send some Token token to userWallets", async () => {
 
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
+    var tx = await token.transfer(userWallet.address, toBigNum("1000", 18));
     await tx.wait();
 
+    var tx = await token.transfer(userWallet1.address, toBigNum("1000", 18));
+    await tx.wait();
+
+    var tx = await token.transfer(userWallet2.address, toBigNum("1000", 18));
+    await tx.wait();
+
+    checkBalance();
+
   });
+
+  it(" send some Token token to userWallets", async () => {
+
+    var tx = await token.transfer(userWallet.address, toBigNum("1000", 18));
+    await tx.wait();
+
+    var tx = await token.transfer(userWallet1.address, toBigNum("1000", 18));
+    await tx.wait();
+
+    var tx = await token.transfer(userWallet2.address, toBigNum("1000", 18));
+    await tx.wait();
+
+    checkBalance();
+
+  });
+
 
   it("buy test", async () => {
-    var tx = await exchangeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens(
+    var tx = await exchangeRouter.connect(userWallet).swapExactETHForTokensSupportingFeeOnTransferTokens(
       0,
       [
         wBNB.address,
@@ -118,95 +147,29 @@ describe("Legercy exchange", () => {
       "341443532432123",
       {
         value:
-          ethers.utils.parseUnits("0.001", 18),
+          ethers.utils.parseUnits("0.01", 18),
       }
     );
     await tx.wait();
-  });
-
-
-  it("buy test", async () => {
-    var tx = await exchangeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens(
-      0,
-      [
-        wBNB.address,
-        token.address
-      ],
-      userWallet.address,
-      "341443532432123",
-      {
-        value:
-          ethers.utils.parseUnits("0.001", 18),
-      }
-    );
-    await tx.wait();
-  });
-
-
-  it("buy test", async () => {
-    var tx = await exchangeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens(
-      0,
-      [
-        wBNB.address,
-        token.address
-      ],
-      userWallet.address,
-      "341443532432123",
-      {
-        value:
-          ethers.utils.parseUnits("0.001", 18),
-      }
-    );
-    await tx.wait();
-  });
-
-
-  it("buy test", async () => {
-    var tx = await exchangeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens(
-      0,
-      [
-        wBNB.address,
-        token.address
-      ],
-      userWallet.address,
-      "341443532432123",
-      {
-        value:
-          ethers.utils.parseUnits("0.001", 18),
-      }
-    );
-    await tx.wait();
+    checkBalance();
 
   });
 
   it(" send some Token token to userWallet", async () => {
 
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
+    var tx = await token.transfer(userWallet.address, toBigNum("1000", 18));
     await tx.wait();
 
-  });
-  it(" send some Token token to userWallet", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
-    await tx.wait();
-
-  });
-  it(" send some Token token to userWallet", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
-    await tx.wait();
-
-  });
-  it(" send some Token token to userWallet", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
-    await tx.wait();
+    checkBalance();
 
   });
 
   it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("1", 5),
+    var tx = await token.connect(userWallet).approve(exchangeRouter.address, ethers.utils.parseUnits("100", 18));
+    await tx.wait();
+
+    var tx = await exchangeRouter.connect(userWallet).swapExactTokensForETHSupportingFeeOnTransferTokens(
+      toBigNum("100", 18),
       0,
       [token.address,
       wBNB.address],
@@ -214,257 +177,15 @@ describe("Legercy exchange", () => {
       "124325454365443"
     );
     await tx.wait();
-  });
-
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("1", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("1", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("2", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-
-  });
-
-  it(" send some Token token to userWallet", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
-    await tx.wait();
-  });
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("2", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("2", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("2", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("2", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("2", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("2", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-  it("buy test", async () => {
-    var tx = await exchangeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens(
-      0,
-      [
-        wBNB.address,
-        token.address
-      ],
-      userWallet.address,
-      "341443532432123",
-      {
-        value:
-          ethers.utils.parseUnits("0.001", 18),
-      }
-    );
-    await tx.wait();
-  });
-
-  it("buy test", async () => {
-    var tx = await exchangeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens(
-      0,
-      [
-        wBNB.address,
-        token.address
-      ],
-      userWallet.address,
-      "341443532432123",
-      {
-        value:
-          ethers.utils.parseUnits("0.001", 18),
-      }
-    );
-    await tx.wait();
-  });
-
-  it("buy test", async () => {
-    var tx = await exchangeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens(
-      0,
-      [
-        wBNB.address,
-        token.address
-      ],
-      userWallet.address,
-      "341443532432123",
-      {
-        value:
-          ethers.utils.parseUnits("0.001", 18),
-      }
-    );
-    await tx.wait();
-  });
-
-  it(" send some Token token to userWallet", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
-    await tx.wait();
-
-
-  });
-  it(" send some Token token to userWallet", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
-    await tx.wait();
-
-  });
-
-  it(" send some Token token to userWallet", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
-    await tx.wait();
-
-  });
-
-  it("buy test", async () => {
-    var tx = await exchangeRouter.swapExactETHForTokensSupportingFeeOnTransferTokens(
-      0,
-      [
-        wBNB.address,
-        token.address
-      ],
-      userWallet.address,
-      "341443532432123",
-      {
-        value:
-          ethers.utils.parseUnits("0.001", 18),
-      }
-    );
-    await tx.wait();
-  });
-
-
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("1000", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-  it("sell test", async () => {
-    var tx = await exchangeRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-      ethers.utils.parseUnits("1000", 5),
-      0,
-      [token.address,
-      wBNB.address],
-      userWallet.address,
-      "124325454365443"
-    );
-    await tx.wait();
-  });
-
-
-
-
-  it(" send some Token token to userWallet", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
-    await tx.wait();
-
-  });
-
-  it(" send some Token token to userWallet", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 5));
-    await tx.wait();
-
   });
 
 });
+
+const checkBalance = async () => {
+  // console.log("user wallet wBNB balance", fromBigNum(await ethers.provider.getBalance(userWallet.address), 18));
+
+  console.log("user wallet token balance", fromBigNum(await token.balanceOf(userWallet.address), 18));
+  console.log("user wallet1 token balance", fromBigNum(await token.balanceOf(userWallet1.address), 18));
+  console.log("user wallet2 token balance", fromBigNum(await token.balanceOf(userWallet2.address), 18));
+}
 
