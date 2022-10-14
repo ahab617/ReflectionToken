@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, upgrades } = require("hardhat");
 const { toBigNum, fromBigNum } = require("./utils.js");
 
 var owner;
@@ -58,7 +58,7 @@ describe("Exchage deploys", () => {
 
   it("Token deploy", async () => {
     const Token = await ethers.getContractFactory("Token");
-    token = await Token.deploy(exchangeRouter.address, wBNB.address, "200");
+    token = await upgrades.deployProxy(Token, [exchangeRouter.address, "200", toBigNum("100000000", 18)]);
     await token.deployed();
   });
 
@@ -88,53 +88,67 @@ describe("constract prepare", () => {
   });
 });
 
-describe("Legercy exchange", () => {
+describe("test", () => {
 
-  it(" send some Token token to userWallets", async () => {
-
+  it(" send 1000 tokens to userWallets", async () => {
     var tx = await token.transfer(userWallet.address, toBigNum("1000", 18));
     await tx.wait();
-
     var tx = await token.transfer(userWallet1.address, toBigNum("1000", 18));
     await tx.wait();
-
     var tx = await token.transfer(userWallet2.address, toBigNum("1000", 18));
     await tx.wait();
+  });
 
-    checkBalance();
+  it(" send 1 Token token to userWallets to check reflection result", async () => {
+    var tx = await token.transfer(userWallet.address, toBigNum("1", 18));
+    await tx.wait();
+    var tx = await token.transfer(userWallet1.address, toBigNum("1", 18));
+    await tx.wait();
+    var tx = await token.transfer(userWallet2.address, toBigNum("1", 18));
+    await tx.wait();
+
+    await checkBalance();
+  });
+
+  it(" exclude userwallet2 from reflection", async () => {
+
+    var tx = await token.setIsDividendExempt(userWallet2.address, true);
+    await tx.wait();
 
   });
 
-  it(" send some Token token to userWallets", async () => {
-
+  it(" send 1000 tokens to userWallet1,1 token to userWallet1 and userWallet2", async () => {
     var tx = await token.transfer(userWallet.address, toBigNum("1000", 18));
     await tx.wait();
-
-    var tx = await token.transfer(userWallet1.address, toBigNum("1000", 18));
+    var tx = await token.transfer(userWallet1.address, toBigNum("1", 18));
     await tx.wait();
+    var tx = await token.transfer(userWallet2.address, toBigNum("1", 18));
+    await tx.wait();
+  });
 
-    var tx = await token.transfer(userWallet2.address, toBigNum("1000", 18));
+  it(" send 1 Token token to userWallets to check reflection result(exclude useWallet2)", async () => {
+    var tx = await token.transfer(userWallet.address, toBigNum("1", 18));
+    await tx.wait();
+    var tx = await token.transfer(userWallet1.address, toBigNum("1", 18));
+    await tx.wait();
+    var tx = await token.transfer(userWallet2.address, toBigNum("1", 18));
+    await tx.wait();
+    
+    await checkBalance();
+  });
+
+  it("mint test", async () => {
+    var tx = await token.mint(userWallet1.address, toBigNum("100", 18));
     await tx.wait();
 
     checkBalance();
-
   });
 
-  it(" send some Token token to userWallets", async () => {
-
-    var tx = await token.transfer(userWallet.address, toBigNum("1000", 18));
+  it("burn test", async () => {
+    var tx = await token.mint(userWallet1.address, toBigNum("100", 18));
     await tx.wait();
-
-    var tx = await token.transfer(userWallet1.address, toBigNum("1000", 18));
-    await tx.wait();
-
-    var tx = await token.transfer(userWallet2.address, toBigNum("1000", 18));
-    await tx.wait();
-
     checkBalance();
-
   });
-
 
   it("buy test", async () => {
     var tx = await exchangeRouter.connect(userWallet).swapExactETHForTokensSupportingFeeOnTransferTokens(
@@ -177,13 +191,14 @@ describe("Legercy exchange", () => {
       "124325454365443"
     );
     await tx.wait();
+    checkBalance();
+
   });
 
 });
 
 const checkBalance = async () => {
   // console.log("user wallet wBNB balance", fromBigNum(await ethers.provider.getBalance(userWallet.address), 18));
-
   console.log("user wallet token balance", fromBigNum(await token.balanceOf(userWallet.address), 18));
   console.log("user wallet1 token balance", fromBigNum(await token.balanceOf(userWallet1.address), 18));
   console.log("user wallet2 token balance", fromBigNum(await token.balanceOf(userWallet2.address), 18));
